@@ -1,0 +1,9 @@
+### English
+GET http://localhost:3000/
+Accept-Language: en
+
+###
+
+### Vietnamese
+GET http://localhost:3000/
+Accept-Language: vi
