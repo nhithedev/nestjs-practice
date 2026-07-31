@@ -5,7 +5,7 @@ import { I18nService } from 'nestjs-i18n';
 export class AppService {
   constructor(private readonly i18n: I18nService) {}
 
-  getHello(lang?: string): string {
-    return this.i18n.translate('common.hello', { lang });
+  getHello(): string {
+    return this.i18n.translate('common.hello');
   }
 }
