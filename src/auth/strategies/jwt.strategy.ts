@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
+import { I18nService } from 'nestjs-i18n';
 
 import { RedisService } from '../../redis/redis.service';
 
@@ -24,6 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly i18n: I18nService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -42,7 +44,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   ): Promise<AuthenticatedUser> {
     // Chỉ cho phép access token
     if (payload.type !== 'access') {
-      throw new UnauthorizedException('Token type không hợp lệ');
+      throw new UnauthorizedException(
+        this.i18n.translate('auth.invalidTokenType'),
+      );
     }
 
     // Trích xuất raw Bearer token
@@ -52,7 +56,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     // Kiểm tra token có trong Redis blacklist không
     const isBlacklisted = await this.redisService.isBlacklisted(token);
     if (isBlacklisted) {
-      throw new UnauthorizedException('Token đã bị thu hồi');
+      throw new UnauthorizedException(this.i18n.translate('auth.tokenRevoked'));
     }
 
     return { userId: payload.sub, email: payload.email };

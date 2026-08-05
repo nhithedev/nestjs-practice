@@ -6,12 +6,13 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 const PASSWORD_MIN_LENGTH = 12;
 
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
-  @IsEmail({}, { message: 'Email không hợp lệ' })
+  @IsEmail({}, { message: i18nValidationMessage('validation.emailInvalid') })
   @IsNotEmpty()
   email!: string;
 
@@ -22,7 +23,7 @@ export class RegisterDto {
   @IsString()
   // S006: không nhúng tên/giá trị hằng số vào message hiển thị cho người dùng
   @MinLength(PASSWORD_MIN_LENGTH, {
-    message: 'Password quá ngắn, vui lòng nhập nhiều ký tự hơn',
+    message: i18nValidationMessage('validation.passwordTooShort'),
   })
   @IsNotEmpty()
   password!: string;

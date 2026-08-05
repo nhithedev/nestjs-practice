@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { join } from 'path';
 import { AcceptLanguageResolver, I18nModule } from 'nestjs-i18n';
 import { RedisModule } from '@nestjs-modules/ioredis';
@@ -7,6 +8,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { NoCacheHeaderInterceptor } from './common/interceptors/no-cache.interceptor';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -71,6 +73,12 @@ const GLOBAL_THROTTLE_LIMIT = 10;
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: NoCacheHeaderInterceptor,
+    },
+  ],
 })
 export class AppModule {}

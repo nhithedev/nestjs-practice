@@ -8,6 +8,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -24,6 +25,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthenticatedUser } from './strategies/jwt.strategy';
+import { NoCacheHeaderInterceptor } from '../common/interceptors/no-cache.interceptor';
 
 interface RequestWithUser extends ExpressRequest {
   user: AuthenticatedUser;
@@ -34,8 +36,20 @@ interface RequestWithUser extends ExpressRequest {
 
 const LOGIN_THROTTLE_TTL_MS = 60000;
 const LOGIN_THROTTLE_LIMIT = 5;
+const CONNECT_SID_COOKIE = 'connect.sid';
+const SESSION_ID_COOKIE = 'sessionId';
 
 @ApiTags('Auth')
+@ApiHeader({
+  name: 'Accept-Language',
+  description: 'Language (vi hoặc en)',
+  required: false,
+  schema: {
+    type: 'string',
+    default: 'vi',
+  },
+})
+@UseInterceptors(NoCacheHeaderInterceptor)
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -53,20 +67,8 @@ export class AuthController {
     status: 409,
     description: 'Email đã tồn tại',
   })
-  async register(
-    @Body() dto: RegisterDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    response.setHeader(`Cache-Control`, `no-store, no-cache, must-revalidate`);
-    response.setHeader(`Pragma`, `no-cache`);
-    response.setHeader(`Expires`, `0`);
-
-    const tokens = await this.authService.register(dto);
-
-    return {
-      message: 'Đăng ký thành công',
-      ...tokens,
-    };
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
   @Post('login')
@@ -89,20 +91,8 @@ export class AuthController {
     status: 401,
     description: 'Sai email hoặc mật khẩu',
   })
-  async login(
-    @Body() dto: LoginDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    response.setHeader(`Cache-Control`, `no-store, no-cache, must-revalidate`);
-    response.setHeader(`Pragma`, `no-cache`);
-    response.setHeader(`Expires`, `0`);
-
-    const tokens = await this.authService.login(dto);
-
-    return {
-      message: 'Đăng nhập thành công',
-      ...tokens,
-    };
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
   }
 
   @Post('logout')
@@ -129,37 +119,13 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Res({ passthrough: true }) response: Response,
   ) {
-    response.setHeader(`Cache-Control`, `no-store, no-cache, must-revalidate`);
-    response.setHeader(`Pragma`, `no-cache`);
-    response.setHeader(`Expires`, `0`);
+    // Invalidates and blacklists both access and refresh tokens via AuthService.logout
+    const result = await this.authService.logout(req);
 
-    if (req.session) {
-      req.session.destroy(() => undefined);
-    }
+    response.clearCookie(CONNECT_SID_COOKIE);
+    response.clearCookie(SESSION_ID_COOKIE);
 
-    response.clearCookie('connect.sid');
-    response.clearCookie('sessionId');
-
-    const authorization = req.headers.authorization ?? '';
-
-    const accessToken = authorization.startsWith('Bearer ')
-      ? authorization.slice(7)
-      : '';
-
-    const refreshToken = req.headers['x-refresh-token'];
-
-    const normalizedRefreshToken = Array.isArray(refreshToken)
-      ? refreshToken[0]
-      : refreshToken;
-
-    await this.authService.invalidateSession(
-      accessToken,
-      normalizedRefreshToken,
-    );
-
-    return {
-      message: 'Đăng xuất thành công',
-    };
+    return result;
   }
 
   @Get('me')
@@ -176,14 +142,7 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized',
   })
-  getMe(
-    @Req() req: RequestWithUser,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    response.setHeader(`Cache-Control`, `no-store, no-cache, must-revalidate`);
-    response.setHeader(`Pragma`, `no-cache`);
-    response.setHeader(`Expires`, `0`);
-
+  getMe(@Req() req: RequestWithUser) {
     return {
       user: req.user,
     };
