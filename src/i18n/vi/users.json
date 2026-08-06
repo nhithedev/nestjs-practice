@@ -1,0 +1,6 @@
+{
+  "AVATAR_INVALID_TYPE": "Avatar chỉ chấp nhận file ảnh",
+  "USER_NOT_FOUND": "User không tồn tại",
+  "CANNOT_FOLLOW_SELF": "Không thể follow chính mình",
+  "CANNOT_UNFOLLOW_SELF": "Không thể unfollow chính mình"
+}
