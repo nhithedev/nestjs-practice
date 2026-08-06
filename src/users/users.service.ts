@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { I18nContext } from 'nestjs-i18n';
 
 import { Attachment } from '../attachments/entities/attachment.entity';
+import { UserProfileDto } from './dto/user-profile.dto';
 import { UserFollow } from './entities/user-follow.entity';
 import { User } from './entities/user.entity';
 
@@ -21,18 +22,6 @@ export interface CreateUserData {
 
 export interface UpdateUserData {
   name?: string;
-}
-
-export interface UserProfile {
-  id: string;
-  email: string;
-  name: string | null;
-  avatarUrl: string | null;
-  followersCount: number;
-  followingCount: number;
-  isFollowing: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 const ALLOWED_AVATAR_TYPES = new Set([
@@ -68,7 +57,7 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async getProfile(userId: string, viewerId?: string): Promise<UserProfile> {
+  async getProfile(userId: string, viewerId?: string): Promise<UserProfileDto> {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
 
     if (!user) {
@@ -82,7 +71,7 @@ export class UsersService {
     userId: string,
     data: UpdateUserData,
     avatarFile?: Express.Multer.File,
-  ): Promise<UserProfile> {
+  ): Promise<UserProfileDto> {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
     });
@@ -130,7 +119,7 @@ export class UsersService {
   async followUser(
     followerId: string,
     followingId: string,
-  ): Promise<UserProfile> {
+  ): Promise<UserProfileDto> {
     if (followerId === followingId) {
       throw new BadRequestException(this.translate('users.CANNOT_FOLLOW_SELF'));
     }
@@ -159,7 +148,7 @@ export class UsersService {
   async unfollowUser(
     followerId: string,
     followingId: string,
-  ): Promise<UserProfile> {
+  ): Promise<UserProfileDto> {
     if (followerId === followingId) {
       throw new BadRequestException(
         this.translate('users.CANNOT_UNFOLLOW_SELF'),
@@ -179,7 +168,10 @@ export class UsersService {
     return this.getProfile(followingId, followerId);
   }
 
-  private async toProfile(user: User, viewerId?: string): Promise<UserProfile> {
+  private async toProfile(
+    user: User,
+    viewerId?: string,
+  ): Promise<UserProfileDto> {
     const [followersCount, followingCount, isFollowing] = await Promise.all([
       this.followsRepository.count({ where: { followingId: user.id } }),
       this.followsRepository.count({ where: { followerId: user.id } }),
@@ -190,17 +182,19 @@ export class UsersService {
         : Promise.resolve(false),
     ]);
 
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarAttachment?.url ?? null,
-      followersCount,
-      followingCount,
-      isFollowing,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    const profile = new UserProfileDto();
+
+    profile.id = user.id;
+    profile.email = user.email;
+    profile.name = user.name;
+    profile.avatarUrl = user.avatarAttachment?.url ?? null;
+    profile.followersCount = followersCount;
+    profile.followingCount = followingCount;
+    profile.isFollowing = isFollowing;
+    profile.createdAt = user.createdAt;
+    profile.updatedAt = user.updatedAt;
+
+    return profile;
   }
 
   private assertAvatarFile(file: Express.Multer.File): void {
