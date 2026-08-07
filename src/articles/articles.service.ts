@@ -55,6 +55,24 @@ export class ArticlesService {
     return article;
   }
 
+  // Dùng bởi CommentsService để xác nhận article tồn tại + lấy articleId,
+  // không cần load kèm `tags` như loadArticleBySlug() — tránh trùng logic
+  // "tìm theo slug, 404 nếu không có" ở 2 nơi.
+  async assertArticleExists(slug: string): Promise<string> {
+    const article = await this.articlesRepository.findOne({
+      where: { slug },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!article) {
+      throw new NotFoundException(this.translate('articles.ARTICLE_NOT_FOUND'));
+    }
+
+    return article.id;
+  }
+
   private async findOrCreateTags(names: string[]): Promise<Tag[]> {
     if (names.length === 0) {
       return [];

@@ -1,0 +1,6 @@
+{
+  "COMMENT_NOT_FOUND": "Comment not found",
+  "NOT_AUTHOR": "You are not the author of this comment",
+  "CREATE_SUCCESS": "Comment added successfully",
+  "DELETE_SUCCESS": "Comment deleted successfully"
+}
