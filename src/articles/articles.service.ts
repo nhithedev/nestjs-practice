@@ -123,7 +123,7 @@ export class ArticlesService {
 
   private assertAuthor(article: Article, currentUserId: string): void {
     if (article.authorId !== currentUserId) {
-      throw new ForbiddenException(this.translate('articles.FORBIDDEN'));
+      throw new ForbiddenException(this.translate('articles.NOT_AUTHOR'));
     }
   }
 
@@ -147,7 +147,7 @@ export class ArticlesService {
   async create(
     dto: CreateArticleDto,
     currentUser: AuthenticatedUser,
-  ): Promise<ArticleResponseDto> {
+  ): Promise<{ article: ArticleResponseDto; message: string }> {
     const slug = buildArticleSlug(dto.title);
 
     const tags = await this.findOrCreateTags(dto.tagList ?? []);
@@ -176,16 +176,22 @@ export class ArticlesService {
       throw new NotFoundException(this.translate('articles.ARTICLE_NOT_FOUND'));
     }
 
-    return this.buildArticleResponse(createdArticle, currentUser.userId);
+    return {
+      article: await this.buildArticleResponse(
+        createdArticle,
+        currentUser.userId,
+      ),
+      message: this.translate('articles.CREATE_SUCCESS'),
+    };
   }
 
   async findBySlug(
     slug: string,
     viewerId?: string,
-  ): Promise<ArticleResponseDto> {
+  ): Promise<{ article: ArticleResponseDto }> {
     const article = await this.loadArticleBySlug(slug);
 
-    return this.buildArticleResponse(article, viewerId);
+    return { article: await this.buildArticleResponse(article, viewerId) };
   }
 
   async list(
@@ -198,7 +204,6 @@ export class ArticlesService {
     const queryBuilder = this.articlesRepository
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.tags', 'tag');
-
     if (query.tag) {
       queryBuilder.andWhere('tag.name = :tag', {
         tag: query.tag,
@@ -254,9 +259,9 @@ export class ArticlesService {
         UserFollow,
         'follow',
         `
-      follow.followingId = article.authorId
-      AND follow.followerId = :currentUserId
-    `,
+    follow.following_id = article.author_id
+    AND follow.follower_id = :currentUserId
+  `,
         {
           currentUserId: currentUser.userId,
         },
@@ -284,7 +289,7 @@ export class ArticlesService {
     slug: string,
     dto: UpdateArticleDto,
     currentUser: AuthenticatedUser,
-  ): Promise<ArticleResponseDto> {
+  ): Promise<{ article: ArticleResponseDto; message: string }> {
     const article = await this.loadArticleBySlug(slug);
 
     this.assertAuthor(article, currentUser.userId);
@@ -311,21 +316,32 @@ export class ArticlesService {
 
     const updatedArticle = await this.loadArticleBySlug(article.slug);
 
-    return this.buildArticleResponse(updatedArticle, currentUser.userId);
+    return {
+      article: await this.buildArticleResponse(
+        updatedArticle,
+        currentUser.userId,
+      ),
+      message: this.translate('articles.UPDATE_SUCCESS'),
+    };
   }
 
-  async remove(slug: string, currentUser: AuthenticatedUser): Promise<void> {
+  async remove(
+    slug: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{ message: string }> {
     const article = await this.loadArticleBySlug(slug);
 
     this.assertAuthor(article, currentUser.userId);
 
     await this.articlesRepository.remove(article);
+
+    return { message: this.translate('articles.DELETE_SUCCESS') };
   }
 
   async favorite(
     slug: string,
     currentUser: AuthenticatedUser,
-  ): Promise<ArticleResponseDto> {
+  ): Promise<{ article: ArticleResponseDto }> {
     const article = await this.loadArticleBySlug(slug);
 
     const existingFavorite = await this.favoritesRepository.findOne({
@@ -344,13 +360,15 @@ export class ArticlesService {
       );
     }
 
-    return this.buildArticleResponse(article, currentUser.userId);
+    return {
+      article: await this.buildArticleResponse(article, currentUser.userId),
+    };
   }
 
   async unfavorite(
     slug: string,
     currentUser: AuthenticatedUser,
-  ): Promise<ArticleResponseDto> {
+  ): Promise<{ article: ArticleResponseDto }> {
     const article = await this.loadArticleBySlug(slug);
 
     await this.favoritesRepository.delete({
@@ -358,6 +376,8 @@ export class ArticlesService {
       userId: currentUser.userId,
     });
 
-    return this.buildArticleResponse(article, currentUser.userId);
+    return {
+      article: await this.buildArticleResponse(article, currentUser.userId),
+    };
   }
 }
