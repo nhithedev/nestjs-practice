@@ -155,7 +155,9 @@ async function runMigrations() {
 }
 
 function loadEnv() {
-  const envPath = path.join(__dirname, '../../.env');
+  // NODE_ENV=test nạp .env.test (DB test riêng), mặc định nạp .env (DB dev)
+  const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
+  const envPath = path.join(__dirname, '../../', envFile);
 
   if (!fs.existsSync(envPath)) {
     return;
