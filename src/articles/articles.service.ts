@@ -7,7 +7,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { I18nContext } from 'nestjs-i18n';
 import { In, Repository } from 'typeorm';
 import { UserFollow } from '../users/entities/user-follow.entity';
+import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
+import { UserProfileDto } from '../users/dto/user-profile.dto';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 import { CreateArticleDto } from './dto/create-article.dto';
@@ -34,7 +36,7 @@ export class ArticlesService {
     private readonly favoritesRepository: Repository<ArticleFavorite>,
 
     private readonly usersService: UsersService,
-  ) {}
+  ) { }
 
   private translate(key: string): string {
     return I18nContext.current()?.t(key) ?? key;
@@ -144,6 +146,115 @@ export class ArticlesService {
       favoritesCount,
     );
   }
+
+  private async buildArticleResponseBatch(
+    articles: Article[],
+    viewerId?: string,
+  ): Promise<ArticleResponseDto[]> {
+    if (articles.length === 0) return [];
+
+    const manager = this.articlesRepository.manager;
+
+    const authorIds = [...new Set(articles.map((a) => a.authorId))];
+    const articleIds = articles.map((a) => a.id);
+
+    // 1. Fetch all author User rows in one query
+    const authors = await manager.find(User, {
+      where: { id: In(authorIds) },
+    });
+    const authorsById = new Map(authors.map((u) => [u.id, u]));
+
+    // 2. Follower counts per author: SELECT following_id, COUNT(*) FROM user_follows WHERE following_id IN (...)
+    const followerRows: { following_id: string; cnt: string }[] =
+      await manager
+        .createQueryBuilder(UserFollow, 'uf')
+        .select('uf.following_id', 'following_id')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('uf.following_id IN (:...ids)', { ids: authorIds })
+        .groupBy('uf.following_id')
+        .getRawMany();
+    const followerCountByAuthorId = new Map(
+      followerRows.map((r) => [r.following_id, Number(r.cnt)]),
+    );
+
+    // 3. Following counts per author: SELECT follower_id, COUNT(*) FROM user_follows WHERE follower_id IN (...)
+    const followingRows: { follower_id: string; cnt: string }[] =
+      await manager
+        .createQueryBuilder(UserFollow, 'uf')
+        .select('uf.follower_id', 'follower_id')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('uf.follower_id IN (:...ids)', { ids: authorIds })
+        .groupBy('uf.follower_id')
+        .getRawMany();
+    const followingCountByAuthorId = new Map(
+      followingRows.map((r) => [r.follower_id, Number(r.cnt)]),
+    );
+
+    // 4. Which authors the viewer follows
+    const viewerFollowedAuthorIds = new Set<string>();
+    if (viewerId) {
+      const viewerFollowRows: { following_id: string }[] = await manager
+        .createQueryBuilder(UserFollow, 'uf')
+        .select('uf.following_id', 'following_id')
+        .where('uf.follower_id = :viewerId', { viewerId })
+        .andWhere('uf.following_id IN (:...ids)', { ids: authorIds })
+        .getRawMany();
+      viewerFollowRows.forEach((r) =>
+        viewerFollowedAuthorIds.add(r.following_id),
+      );
+    }
+
+    // 5. Favorites count per article: SELECT article_id, COUNT(*) FROM article_favorites WHERE article_id IN (...)
+    const favCountRows: { article_id: string; cnt: string }[] = await manager
+      .createQueryBuilder(ArticleFavorite, 'af')
+      .select('af.article_id', 'article_id')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('af.article_id IN (:...ids)', { ids: articleIds })
+      .groupBy('af.article_id')
+      .getRawMany();
+    const favCountByArticleId = new Map(
+      favCountRows.map((r) => [r.article_id, Number(r.cnt)]),
+    );
+
+    // 6. Which articles the viewer has favorited
+    const viewerFavoritedArticleIds = new Set<string>();
+    if (viewerId) {
+      const viewerFavRows: { article_id: string }[] = await manager
+        .createQueryBuilder(ArticleFavorite, 'af')
+        .select('af.article_id', 'article_id')
+        .where('af.user_id = :viewerId', { viewerId })
+        .andWhere('af.article_id IN (:...ids)', { ids: articleIds })
+        .getRawMany();
+      viewerFavRows.forEach((r) =>
+        viewerFavoritedArticleIds.add(r.article_id),
+      );
+    }
+
+    // Assemble DTOs in-memory — zero additional queries
+    return articles.map((article) => {
+      const user = authorsById.get(article.authorId)!;
+
+      const authorDto = new UserProfileDto();
+      authorDto.id = user.id;
+      authorDto.email = user.email;
+      authorDto.name = user.name;
+      authorDto.avatarUrl = user.avatarAttachment?.url ?? null;
+      authorDto.followersCount =
+        followerCountByAuthorId.get(user.id) ?? 0;
+      authorDto.followingCount =
+        followingCountByAuthorId.get(user.id) ?? 0;
+      authorDto.isFollowing = viewerFollowedAuthorIds.has(user.id);
+      authorDto.createdAt = user.createdAt;
+      authorDto.updatedAt = user.updatedAt;
+
+      return ArticleResponseDto.fromEntity(
+        article,
+        authorDto,
+        viewerFavoritedArticleIds.has(article.id),
+        favCountByArticleId.get(article.id) ?? 0,
+      );
+    });
+  }
   async create(
     dto: CreateArticleDto,
     currentUser: AuthenticatedUser,
@@ -237,9 +348,7 @@ export class ArticlesService {
 
     const [articles, articlesCount] = await queryBuilder.getManyAndCount();
 
-    const response = await Promise.all(
-      articles.map((article) => this.buildArticleResponse(article, viewerId)),
-    );
+    const response = await this.buildArticleResponseBatch(articles, viewerId);
 
     return {
       articles: response,
@@ -273,10 +382,9 @@ export class ArticlesService {
 
     const [articles, articlesCount] = await queryBuilder.getManyAndCount();
 
-    const response = await Promise.all(
-      articles.map((article) =>
-        this.buildArticleResponse(article, currentUser.userId),
-      ),
+    const response = await this.buildArticleResponseBatch(
+      articles,
+      currentUser.userId,
     );
 
     return {
