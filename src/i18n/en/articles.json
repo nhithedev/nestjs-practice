@@ -1,0 +1,7 @@
+{
+  "ARTICLE_NOT_FOUND": "Article not found",
+  "NOT_AUTHOR": "You are not the author of this article",
+  "CREATE_SUCCESS": "Article created successfully",
+  "UPDATE_SUCCESS": "Article updated successfully",
+  "DELETE_SUCCESS": "Article deleted successfully"
+}
