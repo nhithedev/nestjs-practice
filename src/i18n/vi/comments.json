@@ -1,0 +1,6 @@
+{
+  "COMMENT_NOT_FOUND": "Bình luận không tồn tại",
+  "NOT_AUTHOR": "Bạn không phải tác giả của bình luận này",
+  "CREATE_SUCCESS": "Thêm bình luận thành công",
+  "DELETE_SUCCESS": "Xoá bình luận thành công"
+}

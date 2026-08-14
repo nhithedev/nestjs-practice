@@ -57,6 +57,79 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+### E2E test setup (one-time, local)
+
+E2E tests hit a real running app + real Postgres/Redis, so they need their
+own database, isolated from the one you use for manual dev/Swagger testing:
+
+```bash
+# 1. Copy .env.example -> .env.test, set DB_DATABASE=nestjs_practice_test
+#    (already done in this repo; .env.test is gitignored, create your own).
+
+# 2. Create the test database (Postgres must be running, e.g. docker-compose up -d)
+docker exec nestjs_postgres psql -U postgres -c "CREATE DATABASE nestjs_practice_test;"
+
+# 3. Run migrations against the test database
+$ NODE_ENV=test npm run migration:run   # PowerShell: $env:NODE_ENV='test'; npm run migration:run
+
+# 4. Run the e2e suite
+$ npm run test:e2e
+```
+
+- `NODE_ENV=test` makes `ConfigModule` load `.env.test` instead of `.env`
+  ([app.module.ts](src/app.module.ts)) and makes the migration runner do the
+  same ([migration.runner.ts](src/database/migration.runner.ts)).
+- `test/jest-e2e.json` sets `NODE_ENV=test` automatically via `setupFiles`
+  before each spec file loads, so `npm run test:e2e` works without exporting
+  the variable yourself.
+- Each `*.e2e-spec.ts` truncates every table in `afterEach` (see
+  [test/utils/db.ts](test/utils/db.ts)) so test cases stay independent, and
+  seeds data through real HTTP calls (see
+  [test/utils/fixtures.ts](test/utils/fixtures.ts)) rather than inserting
+  rows directly.
+- [test/comments.e2e-spec.ts](test/comments.e2e-spec.ts) is the reference
+  example, written to condition-coverage ("C2") level for `CommentsController`.
+
+## CI/CD
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push/PR to
+`main`: install → lint → build → unit test → spin up Postgres+Redis service
+containers → run migrations → e2e test, in that fail-fast order.
+
+## Deploy to Render
+
+1. Push this repo to GitHub, then on Render: **New → Web Service** → connect the repo.
+2. **Build Command**: `npm install && npm run build && npm run migration:run`
+3. **Start Command**: `npm run start:prod`
+4. **Environment Variables** (set on the Render dashboard, never commit real
+   secrets): `NODE_ENV=production`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`,
+   `DB_PASSWORD`, `DB_DATABASE`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_TLS`,
+   `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_SECRET`,
+   `JWT_REFRESH_EXPIRES_IN`. Render sets `PORT` itself — don't set it, and
+   don't hardcode a port in code (`main.ts` already reads `process.env.PORT`).
+5. Create a Render Postgres and Redis (or point at external ones, e.g.
+   Neon/Upstash) and fill in the `DB_*`/`REDIS_*` variables above.
+   `database.module.ts` enables SSL automatically when `NODE_ENV=production`
+   (required by Render's managed Postgres), via
+   [database-ssl.factory.ts](src/database/database-ssl.factory.ts):
+   certificate verification is **on by default**. If Render's Postgres uses
+   an internal CA your Node runtime doesn't already trust, paste its CA cert
+   into `DB_SSL_CA` (PEM content, with real newlines escaped as `\n`) so the
+   connection verifies properly instead of skipping verification. Only set
+   `DB_SSL_REJECT_UNAUTHORIZED=false` if you explicitly accept the MITM risk
+   that comes with disabling verification.
+6. Deploy once manually, check build/start logs. After that, every commit
+   pushed to `main` auto-deploys (Render's default Auto-Deploy = the "CD" half).
+7. Known limitation: avatar uploads use local disk storage
+   ([users.controller.ts](src/users/users.controller.ts)), and Render Web
+   Services have an ephemeral filesystem — uploaded avatars are lost on the
+   next deploy/restart. Fixing this means moving to object storage (S3/
+   Cloudinary/paid Render Disk), out of scope for the initial deploy.
+8. Optional: to stop Render deploying commits that failed CI, either enable
+   GitHub branch protection ("require status checks to pass" on `main`), or
+   turn off Render Auto-Deploy and add a `deploy` job to `ci.yml` that curls
+   the Render Deploy Hook after the `test` job passes.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

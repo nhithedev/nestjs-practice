@@ -22,9 +22,11 @@ const GLOBAL_THROTTLE_LIMIT = 10;
 @Module({
   imports: [
     // ── Global config ──────────────────────────────────────────────────────
+    // NODE_ENV=test (set trước khi app module được import, xem test/jest-e2e.json
+    // setupFiles) → nạp .env.test thay vì .env, để e2e test chạy vào DB test riêng
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
     }),
 
     // ── i18n ───────────────────────────────────────────────────────────────

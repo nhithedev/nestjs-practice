@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { buildDatabaseSslOptions } from './database-ssl.factory';
+
 // ── Named constant (C024) ──────────────────────────────────────────────────
 const DB_DEFAULT_PORT = 5432;
 
@@ -19,6 +21,7 @@ const DB_DEFAULT_PORT = 5432;
         entities: [__dirname + '/../**/*.entity{.ts,.js}'],
         synchronize: false, // manual migration
         logging: configService.get<string>('NODE_ENV') !== 'production',
+        ssl: buildDatabaseSslOptions(configService),
       }),
       inject: [ConfigService],
     }),
