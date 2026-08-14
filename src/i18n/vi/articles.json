@@ -1,0 +1,7 @@
+{
+  "ARTICLE_NOT_FOUND": "Bài viết không tồn tại",
+  "NOT_AUTHOR": "Bạn không phải tác giả của bài viết này",
+  "CREATE_SUCCESS": "Tạo bài viết thành công",
+  "UPDATE_SUCCESS": "Cập nhật bài viết thành công",
+  "DELETE_SUCCESS": "Xoá bài viết thành công"
+}

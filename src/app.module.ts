@@ -12,6 +12,7 @@ import { NoCacheHeaderInterceptor } from './common/interceptors/no-cache.interce
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { ArticlesModule } from './articles/articles.module';
 
 // ── Named constants (C024) ─────────────────────────────────────────────────
 const REDIS_DEFAULT_PORT = 6379;
@@ -71,6 +72,7 @@ const GLOBAL_THROTTLE_LIMIT = 10;
     // ── Feature Modules ────────────────────────────────────────────────────
     UsersModule,
     AuthModule,
+    ArticlesModule,
   ],
   controllers: [AppController],
   providers: [
