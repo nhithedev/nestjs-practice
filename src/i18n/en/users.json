@@ -1,0 +1,6 @@
+{
+  "AVATAR_INVALID_TYPE": "Avatar must be an image file",
+  "USER_NOT_FOUND": "User not found",
+  "CANNOT_FOLLOW_SELF": "You cannot follow yourself",
+  "CANNOT_UNFOLLOW_SELF": "You cannot unfollow yourself"
+}
