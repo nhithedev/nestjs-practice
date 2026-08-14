@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  DeleteDateColumn,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -30,6 +31,9 @@ export class Attachment {
 
   @Column({ name: 'file_size', type: 'integer' })
   fileSize!: number;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
