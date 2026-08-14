@@ -19,24 +19,17 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Request as ExpressRequest } from 'express';
-
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
-import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import type {
+  RequestWithOptionalUser,
+  RequestWithUser,
+} from '../common/types/authenticated-request';
 
 import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { QueryArticleDto } from './dto/query-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
-
-interface RequestWithUser extends ExpressRequest {
-  user: AuthenticatedUser;
-}
-
-interface RequestWithOptionalUser extends ExpressRequest {
-  user?: AuthenticatedUser;
-}
 
 @ApiTags('Articles')
 @ApiHeader({

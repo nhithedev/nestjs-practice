@@ -1,12 +1,30 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Client } from 'pg';
+import type { TlsOptions } from 'tls';
 
 const isStatusMode = process.argv.includes('--status');
 
 const DB_DEFAULT_PORT = 5432;
 
 const MIGRATION_FILE_PATTERN = /^[a-zA-Z0-9._-]+.sql$/;
+
+// ── SSL (đồng bộ logic với database-ssl.factory.ts: chỉ bật khi production) ─
+const REJECT_UNAUTHORIZED_DISABLED_VALUE = 'false';
+
+function buildMigrationSslOptions(): boolean | TlsOptions {
+  if (process.env.NODE_ENV !== 'production') {
+    return false;
+  }
+
+  const rejectUnauthorized =
+    process.env.DB_SSL_REJECT_UNAUTHORIZED !==
+    REJECT_UNAUTHORIZED_DISABLED_VALUE;
+
+  const ca = process.env.DB_SSL_CA?.replace(/\\n/g, '\n');
+
+  return ca ? { ca, rejectUnauthorized } : { rejectUnauthorized };
+}
 
 interface MigrationVersionRow extends Record<string, unknown> {
   version: string;
@@ -31,6 +49,7 @@ interface MigrationClientConfig {
   user: string;
   password: string;
   database: string;
+  ssl?: boolean | TlsOptions;
 }
 
 type MigrationClientConstructor = new (
@@ -66,6 +85,7 @@ async function runMigrations() {
     user: process.env.DB_USERNAME ?? 'postgres',
     password: process.env.DB_PASSWORD ?? 'postgres',
     database: process.env.DB_DATABASE ?? 'nestjs_practice',
+    ssl: buildMigrationSslOptions(),
   });
 
   await client.connect();
@@ -155,7 +175,9 @@ async function runMigrations() {
 }
 
 function loadEnv() {
-  const envPath = path.join(__dirname, '../../.env');
+  // NODE_ENV=test nạp .env.test (DB test riêng), mặc định nạp .env (DB dev)
+  const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
+  const envPath = path.join(__dirname, '../../', envFile);
 
   if (!fs.existsSync(envPath)) {
     return;

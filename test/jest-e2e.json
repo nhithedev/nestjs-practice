@@ -3,6 +3,10 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "setupFiles": ["<rootDir>/setup-env.ts"],
+  "moduleNameMapper": {
+    "^file-type$": "<rootDir>/mocks/file-type.ts"
+  },
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }
