@@ -4,8 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as fs from 'fs';
-import { join } from 'path';
 import { Repository } from 'typeorm';
 import { I18nContext } from 'nestjs-i18n';
 
@@ -83,48 +81,60 @@ export class UsersService {
     data: UpdateUserData,
     avatarFile?: Express.Multer.File,
   ): Promise<UserProfile> {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-    });
+    const updatedUserId = await this.usersRepository.manager.transaction(
+      async (manager) => {
+        const usersRepository = manager.getRepository(User);
+        const attachmentsRepository = manager.getRepository(Attachment);
 
-    if (!user) {
-      throw new NotFoundException(this.translate('users.USER_NOT_FOUND'));
-    }
+        const user = await usersRepository.findOne({
+          where: { id: userId },
+        });
 
-    const nextName = data.name?.trim();
+        if (!user) {
+          throw new NotFoundException(this.translate('users.USER_NOT_FOUND'));
+        }
 
-    if (nextName !== undefined) {
-      user.name = nextName || null;
-    }
+        const nextName = data.name?.trim();
 
-    const previousAvatar = await this.attachmentsRepository.findOne({
-      where: { attachableType: 'user', attachableId: user.id },
-    });
+        if (nextName !== undefined) {
+          user.name = nextName || null;
+        }
 
-    if (avatarFile) {
-      this.assertAvatarFile(avatarFile);
+        const previousAvatar =
+          avatarFile && user.avatarAttachmentId
+            ? await attachmentsRepository.findOne({
+                where: { id: user.avatarAttachmentId },
+              })
+            : null;
 
-      const createdAvatar = await this.attachmentsRepository.save(
-        this.attachmentsRepository.create({
-          attachableType: 'user',
-          attachableId: user.id,
-          url: `${PUBLIC_AVATAR_PREFIX}/${avatarFile.filename}`,
-          fileName: avatarFile.originalname,
-          fileType: avatarFile.mimetype,
-          fileSize: avatarFile.size,
-        }),
-      );
+        if (avatarFile) {
+          this.assertAvatarFile(avatarFile);
 
-      user.avatarAttachmentId = createdAvatar.id;
-    }
+          const createdAvatar = await attachmentsRepository.save(
+            attachmentsRepository.create({
+              attachableType: 'user',
+              attachableId: user.id,
+              url: `${PUBLIC_AVATAR_PREFIX}/${avatarFile.filename}`,
+              fileName: avatarFile.originalname,
+              fileType: avatarFile.mimetype,
+              fileSize: avatarFile.size,
+            }),
+          );
 
-    await this.usersRepository.save(user);
+          user.avatarAttachmentId = createdAvatar.id;
+        }
 
-    if (avatarFile && previousAvatar) {
-      await this.removeAttachment(previousAvatar);
-    }
+        await usersRepository.save(user);
 
-    return this.getProfile(user.id, user.id);
+        if (avatarFile && previousAvatar) {
+          await attachmentsRepository.softDelete(previousAvatar.id);
+        }
+
+        return user.id;
+      },
+    );
+
+    return this.getProfile(updatedUserId, updatedUserId);
   }
 
   async followUser(
@@ -212,13 +222,7 @@ export class UsersService {
   }
 
   private async removeAttachment(attachment: Attachment): Promise<void> {
-    const filePath = join(process.cwd(), 'public', attachment.url);
-
-    await this.attachmentsRepository.delete({ id: attachment.id });
-
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath);
-    }
+    await this.attachmentsRepository.softDelete({ id: attachment.id });
   }
 
   private translate(key: string): string {
